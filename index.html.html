@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Horror Quest — жуткий гид по аномалиям</title>
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Special+Elite&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <style>
+        /* ===== ГЛОБАЛЬНЫЕ СТИЛИ ===== */
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:#0a0a0a; color:#b3b3b3; font-family:'Special Elite', cursive; overflow:hidden; height:100vh; position:relative; }
+        #particles { position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; pointer-events:none; overflow:hidden; }
+        .star { position:absolute; background:white; border-radius:50%; opacity:0.6; animation:twinkle var(--duration) infinite alternate; }
+        @keyframes twinkle { 0%{opacity:0.1;transform:scale(0.8);} 100%{opacity:1;transform:scale(1.2);} }
+        #map { width:100vw; height:100vh; z-index:1; position:relative; filter:saturate(0.7) contrast(1.1) brightness(0.8); }
+        #map::after { content:''; position:absolute; top:0; left:0; width:100%; height:100%; background:radial-gradient(circle at 20% 30%, rgba(20,0,20,0.3) 0%, rgba(0,0,0,0.7) 100%); pointer-events:none; z-index:2; }
+
+        /* ===== ИНФО-БЛОК ===== */
+        .info-box {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 1000;
+            background: rgba(10,10,10,0.85);
+            backdrop-filter: blur(8px);
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(180,70,70,0.4);
+            box-shadow: 0 0 30px rgba(180,70,70,0.2);
+            pointer-events: none;
+            max-width: 260px;
+            font-size: 0.9rem;
+        }
+        .info-box h2 {
+            font-family:'Creepster', cursive;
+            font-size: 1.4rem;
+            color:#c0392b;
+            text-shadow:0 0 20px rgba(192,57,43,0.5);
+            letter-spacing:2px;
+            margin-bottom: 2px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+        }
+        .info-box h2 button {
+            background:none;
+            border:none;
+            color:#e67e22;
+            font-size:1.2rem;
+            cursor:pointer;
+            pointer-events:auto;
+            font-family:'Special Elite', cursive;
+            padding:0 6px;
+        }
+        .info-box p { font-size:0.8rem; color:#aaa; margin:2px 0; }
+        .info-box .coords { font-family:'Courier New', monospace; color:#e67e22; font-size:0.75rem; text-shadow:0 0 8px rgba(230,126,34,0.3); }
+        .info-box .place-count { font-size:0.8rem; color:#4ecdc4; margin-top:4px; text-shadow:0 0 10px rgba(78,205,196,0.3); }
+        .info-box .mode-label { font-family:'Creepster', cursive; color:#c0392b; font-size:1rem; letter-spacing:1px; }
+        .info-box .history-dropdown { pointer-events:auto; margin-top:6px; }
+        .info-box .history-dropdown select {
+            background:#1a1a1a; color:#ddd; border:1px solid #444; border-radius:20px;
+            padding:4px 10px; font-family:'Special Elite', cursive; width:100%; cursor:pointer;
+            font-size:0.8rem;
+        }
+
+        /* ===== ПАНЕЛЬ УПРАВЛЕНИЯ ===== */
+        .controls {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(10,10,10,0.9);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 14px 18px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            max-width: 96%;
+            border: 1px solid rgba(180,70,70,0.3);
+            box-shadow: 0 0 40px rgba(180,70,70,0.15);
+            font-family:'Special Elite', cursive;
+            font-size: 0.85rem;
+            pointer-events: auto;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .controls label {
+            font-size: 0.7rem;
+            font-weight:600;
+            color:#888;
+            letter-spacing:1px;
+            text-transform:uppercase;
+            margin-right: 2px;
+        }
+        .controls input[type="text"], .controls input[type="number"] {
+            padding: 6px 12px;
+            border-radius: 30px;
+            border: 1px solid #333;
+            background: #1a1a1a;
+            color: #ddd;
+            font-size: 0.9rem;
+            outline: none;
+            font-family:'Special Elite', cursive;
+            transition:0.3s;
+            min-height: 36px;
+            min-width: 60px;
+        }
+        .controls input:focus { border-color:#c0392b; box-shadow:0 0 20px rgba(192,57,43,0.2); }
+        .controls input[type="number"] { width:70px; text-align:center; }
+        .controls .coord-input input { width:90px; }
+        .controls .coord-input { display:flex; align-items:center; gap:4px; flex-wrap:wrap; justify-content:center; }
+        .controls .city-input { display:flex; align-items:center; gap:4px; flex-wrap:wrap; justify-content:center; }
+        .controls .city-input input { width:140px; }
+        .controls .filter-group { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; justify-content:center; }
+        .controls .filter-group label { font-size:0.7rem; color:#aaa; display:flex; align-items:center; gap:4px; cursor:pointer; }
+        .controls .filter-group input[type="checkbox"] { accent-color:#c0392b; width:16px; height:16px; cursor:pointer; }
+
+        .controls button {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 40px;
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family:'Special Elite', cursive;
+            letter-spacing:0.5px;
+            box-shadow:0 0 20px rgba(108,92,231,0.2);
+            text-shadow:0 0 10px rgba(255,255,255,0.2);
+            min-height: 40px;
+            min-width: 70px;
+        }
+        .controls button:hover { transform:scale(1.03); box-shadow:0 0 30px rgba(108,92,231,0.4); }
+        .controls button:active { transform:scale(0.97); }
+        .controls .geo-btn {
+            background: rgba(180,70,70,0.3);
+            border:1px solid #c0392b;
+            color:#c0392b;
+            padding:6px 14px;
+            border-radius:30px;
+            cursor:pointer;
+            font-size:0.8rem;
+            text-shadow:0 0 10px rgba(192,57,43,0.3);
+            box-shadow:none;
+            min-height: 36px;
+        }
+        .controls .geo-btn:hover { background:rgba(180,70,70,0.5); transform:scale(1.02); }
+
+        .controls .mode-toggle,
+        .controls .type-toggle {
+            display:flex;
+            gap:4px;
+            background:#1a1a1a;
+            border-radius:40px;
+            padding:4px;
+            border:1px solid #333;
+        }
+        .controls .mode-toggle button,
+        .controls .type-toggle button {
+            padding:4px 14px;
+            border-radius:30px;
+            border:none;
+            background:transparent;
+            color:#888;
+            font-weight:600;
+            font-size:0.8rem;
+            cursor:pointer;
+            transition:0.2s;
+            box-shadow:none;
+            font-family:'Special Elite', cursive;
+            min-height: 30px;
+            min-width: 60px;
+        }
+        .controls .mode-toggle button.active,
+        .controls .type-toggle button.active {
+            background:#c0392b;
+            color:#fff;
+            text-shadow:0 0 10px rgba(192,57,43,0.5);
+        }
+        .controls .mode-toggle button:hover,
+        .controls .type-toggle button:hover { color:#fff; }
+        .type-toggle.hidden { display:none; }
+
+        /* ===== ИНДИКАТОР ЗАГРУЗКИ ===== */
+        .loading {
+            position: absolute;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(0,0,0,0.85);
+            padding: 10px 24px;
+            border-radius: 40px;
+            color: #c0392b;
+            font-family:'Creepster', cursive;
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+            display: none;
+            backdrop-filter: blur(4px);
+            border:1px solid rgba(192,57,43,0.3);
+            text-shadow:0 0 20px rgba(192,57,43,0.5);
+            text-align:center;
+        }
+        .loading.active { display:block; }
+
+        /* ===== МАРКЕРЫ ===== */
+        .pulsing-marker { background:#c0392b; border-radius:50%; width:24px; height:24px; border:3px solid #fff; box-shadow:0 0 0 0 rgba(192,57,43,0.7); animation:pulse 1.5s infinite; }
+        @keyframes pulse { 0%{transform:scale(0.9);box-shadow:0 0 0 0 rgba(192,57,43,0.7);} 70%{transform:scale(1.1);box-shadow:0 0 0 20px rgba(192,57,43,0);} 100%{transform:scale(0.9);box-shadow:0 0 0 0 rgba(192,57,43,0);} }
+        .favorite-marker { background:gold; border-radius:50%; width:16px; height:16px; border:2px solid #fff; box-shadow:0 0 20px rgba(255,215,0,0.6); }
+
+        /* ===== АДАПТИВНЫЕ МЕДИА-ЗАПРОСЫ ===== */
+        @media (max-width: 700px) {
+            .controls {
+                padding: 12px 14px;
+                gap: 8px;
+                bottom: 10px;
+                border-radius: 16px;
+                max-height: 70vh;
+                font-size: 0.8rem;
+            }
+            .controls input[type="text"], .controls input[type="number"] {
+                font-size: 0.85rem;
+                padding: 5px 10px;
+                min-height: 32px;
+                min-width: 50px;
+            }
+            .controls input[type="number"] { width:60px; }
+            .controls .coord-input input { width:70px; }
+            .controls .city-input input { width:120px; }
+            .controls button {
+                font-size: 0.85rem;
+                padding: 6px 14px;
+                min-height: 34px;
+                min-width: 60px;
+            }
+            .controls .geo-btn {
+                font-size: 0.75rem;
+                padding: 4px 12px;
+                min-height: 30px;
+            }
+            .controls .mode-toggle button,
+            .controls .type-toggle button {
+                font-size: 0.75rem;
+                padding: 3px 12px;
+                min-height: 26px;
+                min-width: 50px;
+            }
+            .controls .filter-group label { font-size:0.65rem; }
+            .controls label { font-size:0.65rem; }
+            .info-box {
+                top: 8px;
+                left: 8px;
+                padding: 8px 12px;
+                max-width: 200px;
+                font-size: 0.8rem;
+            }
+            .info-box h2 { font-size: 1.2rem; }
+            .info-box p { font-size: 0.7rem; }
+            .info-box .coords { font-size: 0.65rem; }
+            .info-box .place-count { font-size: 0.7rem; }
+            .info-box .history-dropdown select { font-size: 0.7rem; padding: 2px 8px; }
+            .loading {
+                bottom: 75px;
+                font-size: 1rem;
+                padding: 8px 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .controls .coord-input,
+            .controls .city-input {
+                flex: 1 1 100%;
+                justify-content: center;
+            }
+            .controls .city-input input { width: 100px; }
+            .controls .coord-input input { width: 60px; }
+            .controls .filter-group {
+                flex: 1 1 100%;
+                justify-content: center;
+            }
+            .controls .mode-toggle,
+            .controls .type-toggle {
+                flex: 1 1 auto;
+            }
+            .controls button#generateBtn {
+                flex: 1 1 100%;
+                min-height: 44px;
+            }
+            .info-box {
+                max-width: 160px;
+                padding: 6px 10px;
+            }
+            .info-box h2 { font-size: 1rem; }
+            .info-box h2 button { font-size: 1rem; }
+            .info-box .mode-label { font-size: 0.8rem; }
+            .info-box .coords { font-size: 0.6rem; }
+        }
+
+        @media (max-width: 380px) {
+            .controls {
+                padding: 8px 10px;
+                gap: 6px;
+            }
+            .controls input[type="number"] { width: 50px; }
+            .controls .coord-input input { width: 55px; }
+            .controls .city-input input { width: 90px; }
+            .controls button { font-size: 0.75rem; padding: 4px 10px; min-height: 30px; min-width: 50px; }
+            .controls .geo-btn { font-size: 0.7rem; padding: 3px 10px; min-height: 26px; }
+            .controls .mode-toggle button,
+            .controls .type-toggle button { font-size: 0.65rem; padding: 2px 8px; min-height: 22px; min-width: 40px; }
+            .info-box { max-width: 130px; }
+            .info-box h2 { font-size: 0.9rem; }
+            .info-box p { font-size: 0.6rem; }
+        }
+
+        /* Стили для маршрута (темная тема) */
+        .leaflet-routing-container {
+            background: rgba(20,20,20,0.9) !important;
+            color: #ddd !important;
+            border: 1px solid #444 !important;
+            border-radius: 8px !important;
+            font-family: 'Special Elite', cursive !important;
+        }
+        .leaflet-routing-container a { color: #e67e22 !important; }
+        .leaflet-routing-container .leaflet-routing-alt {
+            background: transparent !important;
+        }
+        .leaflet-routing-container .leaflet-routing-alt table td {
+            color: #ccc !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="particles"></div>
+    <div id="map"></div>
+
+    <!-- ИНФО-БЛОК -->
+    <div class="info-box" id="infoBox">
+        <h2>☠️ Horror Quest <button id="shareBtn" title="Поделиться координатами">📤</button></h2>
+        <p class="mode-label" id="modeLabel">Режим: Аномалия</p>
+        <p class="coords" id="currentCoords">Координаты: —</p>
+        <p class="place-count" id="placeCount"></p>
+        <div class="history-dropdown" id="historyContainer">
+            <select id="historySelect"><option value="">История поисков</option></select>
+        </div>
+    </div>
+
+    <!-- ЗАГРУЗКА -->
+    <div class="loading" id="loading">⏳ Некромантия...</div>
+
+    <!-- ПАНЕЛЬ УПРАВЛЕНИЯ -->
+    <div class="controls" id="controls">
+        <div class="city-input">
+            <label>Город</label>
+            <input type="text" id="cityInput" placeholder="Москва" value="Москва">
+            <button class="geo-btn" id="searchCityBtn">🔮 Найти</button>
+        </div>
+        <div class="coord-input">
+            <label>Широта</label>
+            <input type="number" id="latInput" step="0.0001" value="55.7558">
+            <label>Долгота</label>
+            <input type="number" id="lonInput" step="0.0001" value="37.6173">
+            <button class="geo-btn" id="geoBtn">📍 Моё местоположение</button>
+        </div>
+        <div class="radius-wrap">
+            <label>Радиус (км)</label>
+            <input type="number" id="radiusInput" min="0.5" max="50" step="0.5" value="5">
+        </div>
+        <div class="filter-group" id="filterGroup">
+            <label><input type="checkbox" value="all" checked> Все</label>
+            <label><input type="checkbox" value="industrial"> Заводы</label>
+            <label><input type="checkbox" value="manor"> Усадьбы</label>
+            <label><input type="checkbox" value="cemetery"> Кладбища</label>
+            <label><input type="checkbox" value="ruins"> Руины</label>
+        </div>
+        <div class="mode-toggle">
+            <button class="active" id="modeAnomaly">Аномалия</button>
+            <button id="modeAbandoned">Заброшки</button>
+        </div>
+        <div class="type-toggle" id="typeToggle">
+            <button class="active" id="attractorBtn">Аттрактор</button>
+            <button id="voidBtn">Пустота</button>
+        </div>
+        <button id="generateBtn">🔮 Найти</button>
+    </div>
+
+    <script>
+        // ============================================================
+        // 0. ЧАСТИЦЫ
+        // ============================================================
+        (function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 150; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                const size = Math.random() * 3 + 1;
+                star.style.width = size + 'px';
+                star.style.height = size + 'px';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.setProperty('--duration', (Math.random() * 3 + 2) + 's');
+                star.style.animationDelay = Math.random() * 5 + 's';
+                container.appendChild(star);
+            }
+        })();
+
+        // ============================================================
+        // 1. КАРТА
+        // ============================================================
+        const map = L.map('map').setView([55.7558, 37.6173], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let markerLayer = L.layerGroup().addTo(map);
+        let pathLayer = L.layerGroup().addTo(map);
+        let favoriteLayer = L.layerGroup().addTo(map);
+        let radiusCircle = null;
+        let routingControl = null;
+        let userMarker = null;
+        let anomalyMarker = null;
+
+        // ============================================================
+        // 2. УПРАВЛЕНИЕ
+        // ============================================================
+        let currentMode = 'anomaly';
+        let currentType = 'attractor';
+        let searchHistory = JSON.parse(localStorage.getItem('hq_history')) || [];
+        let favorites = JSON.parse(localStorage.getItem('hq_favorites')) || [];
+
+        const latInput = document.getElementById('latInput');
+        const lonInput = document.getElementById('lonInput');
+        const radiusInput = document.getElementById('radiusInput');
+        const cityInput = document.getElementById('cityInput');
+        const searchCityBtn = document.getElementById('searchCityBtn');
+        const modeAnomaly = document.getElementById('modeAnomaly');
+        const modeAbandoned = document.getElementById('modeAbandoned');
+        const attractorBtn = document.getElementById('attractorBtn');
+        const voidBtn = document.getElementById('voidBtn');
+        const generateBtn = document.getElementById('generateBtn');
+        const geoBtn = document.getElementById('geoBtn');
+        const infoCoords = document.getElementById('currentCoords');
+        const modeLabel = document.getElementById('modeLabel');
+        const placeCount = document.getElementById('placeCount');
+        const loading = document.getElementById('loading');
+        const typeToggle = document.getElementById('typeToggle');
+        const filterCheckboxes = document.querySelectorAll('#filterGroup input[type="checkbox"]');
+        const historySelect = document.getElementById('historySelect');
+        const shareBtn = document.getElementById('shareBtn');
+
+        // Фильтры
+        let activeFilters = ['all'];
+        function updateFilters() {
+            activeFilters = [];
+            filterCheckboxes.forEach(cb => { if (cb.checked) activeFilters.push(cb.value); });
+            if (activeFilters.length === 0) {
+                document.querySelector('#filterGroup input[value="all"]').checked = true;
+                activeFilters = ['all'];
+            }
+        }
+        filterCheckboxes.forEach(cb => {
+            cb.addEventListener('change', () => {
+                const allCb = document.querySelector('#filterGroup input[value="all"]');
+                if (cb.value === 'all') {
+                    if (cb.checked) {
+                        filterCheckboxes.forEach(c => { if (c.value !== 'all') c.checked = false; });
+                    } else {
+                        const anyChecked = Array.from(filterCheckboxes).some(c => c.checked && c.value !== 'all');
+                        if (!anyChecked) allCb.checked = true;
+                    }
+                } else {
+                    if (cb.checked) {
+                        allCb.checked = false;
+                    } else {
+                        const anyChecked = Array.from(filterCheckboxes).some(c => c.checked && c.value !== 'all');
+                        if (!anyChecked) allCb.checked = true;
+                    }
+                }
+                updateFilters();
+            });
+        });
+
+        // Переключение режимов
+        modeAnomaly.addEventListener('click', function() {
+            this.classList.add('active');
+            modeAbandoned.classList.remove('active');
+            currentMode = 'anomaly';
+            typeToggle.style.display = 'flex';
+            document.getElementById('filterGroup').style.display = 'none';
+            modeLabel.textContent = 'Режим: Аномалия';
+            placeCount.textContent = '';
+        });
+        modeAbandoned.addEventListener('click', function() {
+            this.classList.add('active');
+            modeAnomaly.classList.remove('active');
+            currentMode = 'abandoned';
+            typeToggle.style.display = 'none';
+            document.getElementById('filterGroup').style.display = 'flex';
+            modeLabel.textContent = 'Режим: Заброшки';
+            placeCount.textContent = '';
+        });
+
+        attractorBtn.addEventListener('click', function() {
+            this.classList.add('active');
+            voidBtn.classList.remove('active');
+            currentType = 'attractor';
+        });
+        voidBtn.addEventListener('click', function() {
+            this.classList.add('active');
+            attractorBtn.classList.remove('active');
+            currentType = 'void';
+        });
+
+        // ============================================================
+        // 3. ГЕОКОДИНГ
+        // ============================================================
+        async function geocodeCity(city) {
+            const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Ошибка геокодинга');
+            const data = await response.json();
+            if (data.length === 0) throw new Error('Город не найден');
+            return {
+                lat: parseFloat(data[0].lat),
+                lon: parseFloat(data[0].lon),
+                display_name: data[0].display_name
+            };
+        }
+
+        searchCityBtn.addEventListener('click', async () => {
+            const city = cityInput.value.trim();
+            if (!city) { alert('Введите название города'); return; }
+            try {
+                const result = await geocodeCity(city);
+                latInput.value = result.lat.toFixed(6);
+                lonInput.value = result.lon.toFixed(6);
+                setCoords(result.lat, result.lon);
+                infoCoords.textContent = `Город: ${result.display_name.split(',')[0]}`;
+                addHistory(`Город: ${result.display_name.split(',')[0]}`, result.lat, result.lon);
+            } catch (err) {
+                alert('Город не найден. Проверьте название.');
+            }
+        });
+
+        // ============================================================
+        // 4. ГЕОЛОКАЦИЯ
+        // ============================================================
+        function setCoords(lat, lon) {
+            latInput.value = lat.toFixed(6);
+            lonInput.value = lon.toFixed(6);
+            infoCoords.textContent = `Координаты: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+            map.setView([lat, lon], 14);
+            if (userMarker) map.removeLayer(userMarker);
+            const userIcon = L.divIcon({
+                html: '<div style="background:#c0392b;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 30px rgba(192,57,43,0.6);"></div>',
+                iconSize: [16,16],
+                className: ''
+            });
+            userMarker = L.marker([lat, lon], { icon: userIcon }).addTo(map)
+                .bindPopup('Вы здесь');
+        }
+
+        geoBtn.addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                alert('Геолокация не поддерживается.');
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => setCoords(pos.coords.latitude, pos.coords.longitude),
+                (err) => { alert('Не удалось определить местоположение. Введите вручную.'); },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        });
+
+        // ============================================================
+        // 5. ИСТОРИЯ
+        // ============================================================
+        function addHistory(label, lat, lon) {
+            const entry = { label, lat, lon, timestamp: Date.now() };
+            searchHistory = searchHistory.filter(h => h.label !== label || (h.lat === lat && h.lon === lon));
+            searchHistory.unshift(entry);
+            if (searchHistory.length > 10) searchHistory.pop();
+            localStorage.setItem('hq_history', JSON.stringify(searchHistory));
+            updateHistoryDropdown();
+        }
+
+        function updateHistoryDropdown() {
+            historySelect.innerHTML = '<option value="">История поисков</option>';
+            searchHistory.forEach((h, idx) => {
+                const opt = document.createElement('option');
+                opt.value = idx;
+                opt.textContent = h.label + ` (${h.lat.toFixed(4)}, ${h.lon.toFixed(4)})`;
+                historySelect.appendChild(opt);
+            });
+        }
+
+        historySelect.addEventListener('change', function() {
+            const idx = parseInt(this.value);
+            if (isNaN(idx)) return;
+            const entry = searchHistory[idx];
+            if (entry) {
+                latInput.value = entry.lat.toFixed(6);
+                lonInput.value = entry.lon.toFixed(6);
+                setCoords(entry.lat, entry.lon);
+                infoCoords.textContent = `История: ${entry.label}`;
+            }
+            this.value = '';
+        });
+
+        // ============================================================
+        // 6. ИЗБРАННОЕ
+        // ============================================================
+        function toggleFavorite(lat, lon, name, typeLabel) {
+            const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+            const existing = favorites.find(f => f.key === key);
+            if (existing) {
+                favorites = favorites.filter(f => f.key !== key);
+            } else {
+                favorites.push({ key, lat, lon, name, type: typeLabel });
+            }
+            localStorage.setItem('hq_favorites', JSON.stringify(favorites));
+            renderFavorites();
+        }
+
+        function isFavorite(lat, lon) {
+            const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+            return favorites.some(f => f.key === key);
+        }
+
+        function renderFavorites() {
+            favoriteLayer.clearLayers();
+            favorites.forEach(f => {
+                const starIcon = L.divIcon({
+                    html: '⭐',
+                    iconSize: [20,20],
+                    className: 'favorite-marker'
+                });
+                const marker = L.marker([f.lat, f.lon], { icon: starIcon }).addTo(favoriteLayer)
+                    .bindPopup(`<b style="color:gold;">${f.name}</b><br>${f.type}<br>⭐ Избранное`);
+            });
+        }
+
+        // ============================================================
+        // 7. ЗВУК
+        // ============================================================
+        function playHorrorSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(80, audioCtx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.8);
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.8);
+            } catch (e) {}
+        }
+
+        // ============================================================
+        // 8. АНОМАЛИЯ
+        // ============================================================
+        function generateAnomaly(lat, lon, radiusKm, mode) {
+            const numPoints = 800;
+            const gridStepKm = 0.3;
+            function randomPointInCircle(cLat, cLon, rKm) {
+                const R = 6371;
+                const d = rKm / R;
+                const r = Math.sqrt(Math.random()) * d;
+                const theta = Math.random() * 2 * Math.PI;
+                const dLat = r * Math.cos(theta);
+                const dLon = r * Math.sin(theta) / Math.cos(cLat * Math.PI / 180);
+                return { lat: cLat + dLat * 180 / Math.PI, lon: cLon + dLon * 180 / Math.PI };
+            }
+            const points = [];
+            for (let i = 0; i < numPoints; i++) {
+                points.push(randomPointInCircle(lat, lon, radiusKm));
+            }
+            const latDegPerKm = 1 / 111;
+            const lonDegPerKm = 1 / (111 * Math.cos(lat * Math.PI / 180));
+            const marginKm = 0.5;
+            const marginLat = marginKm * latDegPerKm;
+            const marginLon = marginKm * lonDegPerKm;
+            const latStep = gridStepKm * latDegPerKm;
+            const lonStep = gridStepKm * lonDegPerKm;
+            const minLat = lat - radiusKm * latDegPerKm - marginLat;
+            const maxLat = lat + radiusKm * latDegPerKm + marginLat;
+            const minLon = lon - radiusKm * lonDegPerKm - marginLon;
+            const maxLon = lon + radiusKm * lonDegPerKm + marginLon;
+            const latBins = [];
+            for (let l = minLat; l <= maxLat; l += latStep) latBins.push(l);
+            const lonBins = [];
+            for (let l = minLon; l <= maxLon; l += lonStep) lonBins.push(l);
+            const nLat = latBins.length - 1;
+            const nLon = lonBins.length - 1;
+            if (nLat <= 0 || nLon <= 0) throw new Error('Слишком маленький радиус или шаг сетки');
+            const hist = Array.from({ length: nLat }, () => Array(nLon).fill(0));
+            for (const p of points) {
+                const i = Math.floor((p.lat - minLat) / latStep);
+                const j = Math.floor((p.lon - minLon) / lonStep);
+                if (i >= 0 && i < nLat && j >= 0 && j < nLon) {
+                    hist[i][j]++;
+                }
+            }
+            const totalCells = nLat * nLon;
+            const expected = numPoints / totalCells;
+            let maxDev = -Infinity, minDev = Infinity;
+            let maxIdx = { i: 0, j: 0 }, minIdx = { i: 0, j: 0 };
+            for (let i = 0; i < nLat; i++) {
+                for (let j = 0; j < nLon; j++) {
+                    const dev = (hist[i][j] - expected) / (expected + 1e-10);
+                    if (dev > maxDev) { maxDev = dev; maxIdx = { i, j }; }
+                    if (dev < minDev) { minDev = dev; minIdx = { i, j }; }
+                }
+            }
+            const targetIdx = mode === 'attractor' ? maxIdx : minIdx;
+            const centerLat = latBins[targetIdx.i] + latStep / 2;
+            const centerLon = lonBins[targetIdx.j] + lonStep / 2;
+            const deviation = mode === 'attractor' ? maxDev : minDev;
+            return { lat: centerLat, lon: centerLon, deviation };
+        }
+
+        // ============================================================
+        // 9. ЗАБРОШКИ (исправленный)
+        // ============================================================
+        async function fetchAbandonedPlaces(lat, lon, radiusKm) {
+            const radiusMeters = radiusKm * 1000;
+            const overpassQuery = `
+                [out:json];
+                (
+                  node["abandoned"](around:${radiusMeters},${lat},${lon});
+                  node["ruins"](around:${radiusMeters},${lat},${lon});
+                  node["disused"](around:${radiusMeters},${lat},${lon});
+                  node["historic"="ruins"](around:${radiusMeters},${lat},${lon});
+                  node["building"="ruins"](around:${radiusMeters},${lat},${lon});
+                  node["amenity"="grave_yard"](around:${radiusMeters},${lat},${lon});
+                  node["landuse"="cemetery"](around:${radiusMeters},${lat},${lon});
+                  way["abandoned"](around:${radiusMeters},${lat},${lon});
+                  way["ruins"](around:${radiusMeters},${lat},${lon});
+                  way["disused"](around:${radiusMeters},${lat},${lon});
+                  way["historic"="ruins"](around:${radiusMeters},${lat},${lon});
+                  way["building"="ruins"](around:${radiusMeters},${lat},${lon});
+                  way["amenity"="grave_yard"](around:${radiusMeters},${lat},${lon});
+                  way["landuse"="cemetery"](around:${radiusMeters},${lat},${lon});
+                );
+                out body;
+            `;
+            const encodedQuery = encodeURIComponent(overpassQuery);
+            const directUrl = `https://overpass-api.de/api/interpreter?data=${encodedQuery}`;
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
+
+            try {
+                console.log('Запрос через прокси...');
+                const proxyResponse = await fetch(proxyUrl);
+                if (proxyResponse.ok) {
+                    const data = await proxyResponse.json();
+                    console.log('Получено через прокси:', data.elements ? data.elements.length : 0);
+                    return data.elements || [];
+                }
+            } catch (e) {
+                console.warn('Прокси не сработал, пробуем напрямую...');
+            }
+
+            try {
+                console.log('Запрос напрямую...');
+                const directResponse = await fetch(directUrl);
+                if (directResponse.ok) {
+                    const data = await directResponse.json();
+                    console.log('Получено напрямую:', data.elements ? data.elements.length : 0);
+                    return data.elements || [];
+                } else {
+                    throw new Error(`HTTP ${directResponse.status}`);
+                }
+            } catch (e) {
+                console.error('Ошибка запроса к Overpass:', e);
+                throw new Error('Не удалось загрузить данные. Проверьте интернет или повторите позже.');
+            }
+        }
+
+        // ============================================================
+        // 10. ОТОБРАЖЕНИЕ
+        // ============================================================
+        function displayPlaces(places) {
+            markerLayer.clearLayers();
+            pathLayer.clearLayers();
+            if (anomalyMarker) map.removeLayer(anomalyMarker);
+            if (routingControl) { map.removeControl(routingControl); routingControl = null; }
+
+            if (!places || places.length === 0) {
+                placeCount.textContent = 'Ничего не найдено';
+                return;
+            }
+
+            let filteredPlaces = places;
+            if (!activeFilters.includes('all')) {
+                filteredPlaces = places.filter(p => {
+                    let type = 'unknown';
+                    if (p.tags) {
+                        if (p.tags.amenity === 'grave_yard' || p.tags.landuse === 'cemetery') type = 'cemetery';
+                        else if (p.tags.historic === 'ruins' || p.tags.ruins || p.tags.building === 'ruins') type = 'ruins';
+                        else if (p.tags.abandoned || p.tags.disused) {
+                            if (p.tags.industrial || p.tags.man_made === 'works' || p.tags.building === 'industrial') type = 'industrial';
+                            else if (p.tags.historic === 'manor' || p.tags.building === 'manor') type = 'manor';
+                            else type = 'industrial';
+                        }
+                    }
+                    return activeFilters.includes(type);
+                });
+            }
+
+            if (filteredPlaces.length === 0) {
+                placeCount.textContent = 'Ничего не найдено по фильтрам';
+                return;
+            }
+
+            let displayed = 0;
+            let allPlaces = [];
+            for (const p of filteredPlaces) {
+                let lat, lon, name = 'Без названия';
+                if (p.type === 'node') {
+                    lat = p.lat; lon = p.lon;
+                } else if (p.type === 'way') {
+                    if (p.center) {
+                        lat = p.center.lat; lon = p.center.lon;
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+                if (p.tags && p.tags.name) name = p.tags.name;
+                let typeLabel = 'Заброшка';
+                if (p.tags) {
+                    if (p.tags.amenity === 'grave_yard' || p.tags.landuse === 'cemetery') typeLabel = 'Кладбище';
+                    else if (p.tags.historic === 'ruins' || p.tags.ruins || p.tags.building === 'ruins') typeLabel = 'Руины';
+                    else if (p.tags.abandoned) typeLabel = 'Заброшено';
+                    else if (p.tags.disused) typeLabel = 'Не используется';
+                }
+                allPlaces.push({ lat, lon, name, typeLabel });
+                displayed++;
+            }
+
+            if (displayed === 0) {
+                placeCount.textContent = 'Ничего не найдено';
+                return;
+            }
+
+            allPlaces.forEach((place) => {
+                const popupContent = `
+                    <b style="color:#c0392b;">${place.name}</b><br>${place.typeLabel}
+                    <br><button class="route-btn" data-lat="${place.lat}" data-lon="${place.lon}" style="background:#6c5ce7;border:none;color:#fff;border-radius:20px;padding:4px 12px;cursor:pointer;margin-top:4px;">🚶 Маршрут</button>
+                    <br><button class="fav-btn" data-lat="${place.lat}" data-lon="${place.lon}" data-name="${place.name}" data-type="${place.typeLabel}" style="background:${isFavorite(place.lat, place.lon) ? 'gold' : '#333'};border:none;color:#fff;border-radius:20px;padding:4px 12px;cursor:pointer;margin-top:4px;">${isFavorite(place.lat, place.lon) ? '⭐ В избранном' : '⭐ Добавить'}</button>
+                `;
+                const marker = L.marker([place.lat, place.lon], {
+                    icon: L.divIcon({
+                        html: '<div style="background:#2c3e50;width:12px;height:12px;border-radius:50%;border:2px solid #c0392b;box-shadow:0 0 20px rgba(192,57,43,0.4);"></div>',
+                        iconSize: [12,12],
+                        className: ''
+                    })
+                }).addTo(markerLayer).bindPopup(popupContent, { maxWidth: 200 });
+
+                marker.on('popupopen', function() {
+                    const routeBtn = document.querySelector('.route-btn');
+                    const favBtn = document.querySelector('.fav-btn');
+                    if (routeBtn) {
+                        routeBtn.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            const lat = parseFloat(this.dataset.lat);
+                            const lon = parseFloat(this.dataset.lon);
+                            buildRoute(lat, lon);
+                        });
+                    }
+                    if (favBtn) {
+                        favBtn.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            const lat = parseFloat(this.dataset.lat);
+                            const lon = parseFloat(this.dataset.lon);
+                            const name = this.dataset.name;
+                            const type = this.dataset.type;
+                            toggleFavorite(lat, lon, name, type);
+                            const newContent = `
+                                <b style="color:#c0392b;">${name}</b><br>${type}
+                                <br><button class="route-btn" data-lat="${lat}" data-lon="${lon}" style="background:#6c5ce7;border:none;color:#fff;border-radius:20px;padding:4px 12px;cursor:pointer;margin-top:4px;">🚶 Маршрут</button>
+                                <br><button class="fav-btn" data-lat="${lat}" data-lon="${lon}" data-name="${name}" data-type="${type}" style="background:${isFavorite(lat, lon) ? 'gold' : '#333'};border:none;color:#fff;border-radius:20px;padding:4px 12px;cursor:pointer;margin-top:4px;">${isFavorite(lat, lon) ? '⭐ В избранном' : '⭐ Добавить'}</button>
+                            `;
+                            marker.setPopupContent(newContent);
+                        });
+                    }
+                });
+            });
+
+            placeCount.textContent = `Найдено мест: ${displayed}`;
+            window._lastPlaces = allPlaces;
+
+            const group = L.featureGroup(markerLayer.getLayers());
+            if (group.getLayers().length > 0) {
+                map.fitBounds(group.getBounds(), { padding: [40, 40] });
+            }
+        }
+
+        // ============================================================
+        // 11. МАРШРУТ
+        // ============================================================
+        function buildRoute(destLat, destLon) {
+            const userLat = parseFloat(latInput.value);
+            const userLon = parseFloat(lonInput.value);
+            if (isNaN(userLat) || isNaN(userLon)) {
+                alert('Сначала установите своё местоположение.');
+                return;
+            }
+            if (routingControl) {
+                map.removeControl(routingControl);
+                routingControl = null;
+            }
+            routingControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(userLat, userLon),
+                    L.latLng(destLat, destLon)
+                ],
+                routeWhileDragging: false,
+                showAlternatives: false,
+                collapsible: true,
+                lineOptions: {
+                    styles: [{ color: '#c0392b', weight: 4, opacity: 0.8 }]
+                },
+                language: 'ru'
+            }).addTo(map);
+        }
+
+        // ============================================================
+        // 12. ГЛАВНАЯ КНОПКА
+        // ============================================================
+        generateBtn.addEventListener('click', async function() {
+            const lat = parseFloat(latInput.value);
+            const lon = parseFloat(lonInput.value);
+            const radius = parseFloat(radiusInput.value);
+            if (isNaN(lat) || isNaN(lon)) { alert('Введите корректные координаты.'); return; }
+            if (isNaN(radius) || radius <= 0) { alert('Радиус должен быть положительным.'); return; }
+
+            loading.classList.add('active');
+            markerLayer.clearLayers();
+            pathLayer.clearLayers();
+            if (anomalyMarker) map.removeLayer(anomalyMarker);
+            if (routingControl) { map.removeControl(routingControl); routingControl = null; }
+            placeCount.textContent = '';
+
+            if (radiusCircle) map.removeLayer(radiusCircle);
+            radiusCircle = L.circle([lat, lon], {
+                radius: radius * 1000,
+                color: '#c0392b',
+                weight: 1,
+                opacity: 0.4,
+                fillOpacity: 0.05,
+                dashArray: '4 4'
+            }).addTo(map);
+
+            try {
+                if (currentMode === 'anomaly') {
+                    const result = generateAnomaly(lat, lon, radius, currentType);
+                    if (userMarker) map.removeLayer(userMarker);
+                    const userIcon = L.divIcon({
+                        html: '<div style="background:#c0392b;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 30px rgba(192,57,43,0.6);"></div>',
+                        iconSize: [16,16],
+                        className: ''
+                    });
+                    userMarker = L.marker([lat, lon], { icon: userIcon }).addTo(map)
+                        .bindPopup('Вы здесь');
+                    const anomalyColor = '#c0392b';
+                    const anomalyIcon = L.divIcon({
+                        html: `<div style="background:${anomalyColor};width:24px;height:24px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 40px ${anomalyColor};animation:pulse 1.5s infinite;"></div>`,
+                        iconSize: [24,24],
+                        className: 'pulsing-marker'
+                    });
+                    anomalyMarker = L.marker([result.lat, result.lon], { icon: anomalyIcon }).addTo(map)
+                        .bindPopup(`<b style="color:#c0392b;">${currentType === 'attractor' ? 'Аттрактор' : 'Пустота'}</b><br>Координаты: ${result.lat.toFixed(5)}, ${result.lon.toFixed(5)}<br>Отклонение: ${result.deviation.toFixed(2)}<br><button class="route-btn" data-lat="${result.lat}" data-lon="${result.lon}" style="background:#6c5ce7;border:none;color:#fff;border-radius:20px;padding:4px 12px;cursor:pointer;margin-top:4px;">🚶 Маршрут</button>`);
+                    anomalyMarker.on('popupopen', function() {
+                        const routeBtn = document.querySelector('.route-btn');
+                        if (routeBtn) {
+                            routeBtn.addEventListener('click', function(e) {
+                                e.stopPropagation();
+                                const lat = parseFloat(this.dataset.lat);
+                                const lon = parseFloat(this.dataset.lon);
+                                buildRoute(lat, lon);
+                            });
+                        }
+                    });
+                    L.polyline([
+                        [lat, lon],
+                        [result.lat, result.lon]
+                    ], {
+                        color: anomalyColor,
+                        weight: 3,
+                        opacity: 0.5,
+                        dashArray: '8 6'
+                    }).addTo(pathLayer);
+                    const bounds = L.latLngBounds([
+                        [lat, lon],
+                        [result.lat, result.lon]
+                    ]);
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                    infoCoords.textContent = `Аномалия: ${result.lat.toFixed(5)}, ${result.lon.toFixed(5)}`;
+                    placeCount.textContent = '';
+                    playHorrorSound();
+                    addHistory(`Аномалия (${currentType})`, result.lat, result.lon);
+                } else {
+                    updateFilters();
+                    const elements = await fetchAbandonedPlaces(lat, lon, radius);
+                    const places = elements.filter(el => (el.type === 'node' || el.type === 'way') && el.lat && el.lon);
+                    displayPlaces(places);
+                    if (places.length > 0) {
+                        infoCoords.textContent = `Найдено объектов: ${places.length}`;
+                        addHistory(`Заброшки (${activeFilters.join(',')})`, lat, lon);
+                    } else {
+                        infoCoords.textContent = `Ничего не найдено в радиусе ${radius} км`;
+                    }
+                }
+            } catch (err) {
+                alert('Ошибка: ' + err.message);
+                console.error(err);
+            } finally {
+                loading.classList.remove('active');
+            }
+        });
+
+        // ============================================================
+        // 13. ПОДЕЛИТЬСЯ
+        // ============================================================
+        shareBtn.addEventListener('click', () => {
+            const lat = parseFloat(latInput.value);
+            const lon = parseFloat(lonInput.value);
+            if (isNaN(lat) || isNaN(lon)) { alert('Нет координат'); return; }
+            const url = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}&zoom=14`;
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Horror Quest',
+                    text: `Я исследую это место! Координаты: ${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+                    url: url
+                }).catch(() => {});
+            } else {
+                navigator.clipboard.writeText(url).then(() => {
+                    alert('Ссылка скопирована!');
+                }).catch(() => {
+                    prompt('Скопируйте ссылку:', url);
+                });
+            }
+        });
+
+        // ============================================================
+        // 14. СТАРТ
+        // ============================================================
+        async function initCity() {
+            try {
+                const result = await geocodeCity('Москва');
+                latInput.value = result.lat.toFixed(6);
+                lonInput.value = result.lon.toFixed(6);
+                setCoords(result.lat, result.lon);
+                cityInput.value = 'Москва';
+                addHistory('Москва', result.lat, result.lon);
+            } catch (e) {
+                setCoords(55.7558, 37.6173);
+            }
+        }
+        initCity();
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => setCoords(pos.coords.latitude, pos.coords.longitude),
+                () => {},
+                { timeout: 5000, enableHighAccuracy: false }
+            );
+        }
+
+        typeToggle.style.display = 'flex';
+        document.getElementById('filterGroup').style.display = 'none';
+        renderFavorites();
+        updateHistoryDropdown();
+
+        console.log('🕸️ Horror Quest адаптирован для всех устройств!');
+    </script>
+</body>
+</html>
